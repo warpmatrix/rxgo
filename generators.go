@@ -22,9 +22,7 @@ func (sop sourceOperater) op(ctx context.Context, o *Observable) {
 
 	// Scheduler
 	go func() {
-		for end := false; !end; { // made panic op re-enter
-			end = sop.opFunc(ctx, o, out)
-		}
+		sop.opFunc(ctx, o, out)
 		o.closeFlow(out)
 	}()
 }

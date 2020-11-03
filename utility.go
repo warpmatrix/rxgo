@@ -93,7 +93,7 @@ func checkFuncUpcast(fv reflect.Value, inType, outType []reflect.Type, ctx_sup b
 	return
 }
 
-// ckeck gunction the first parameter can accept error
+// ckeck function the first parameter can accept error
 func checkFuncAcceptError(fv reflect.Value) (b bool) {
 	if fv.Kind() != reflect.Func {
 		return // Not func

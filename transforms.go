@@ -6,6 +6,7 @@ package rxgo
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -34,6 +35,7 @@ func (tsop transOperater) op(ctx context.Context, o *Observable) {
 	go func() {
 		end := false
 		for x := range in {
+			fmt.Println("bef: ", end)
 			if end {
 				continue
 			}
@@ -62,6 +64,7 @@ func (tsop transOperater) op(ctx context.Context, o *Observable) {
 				}()
 			default:
 			}
+			fmt.Println("aft: ", end)
 		}
 
 		wg.Wait() //waiting all go-routines completed

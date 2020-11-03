@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/pmlpml/rxgo"
 	"github.com/stretchr/testify/assert"
+	"github.com/warpmatrix/rxgo"
 )
 
 func TestAnyTranform(t *testing.T) {
@@ -95,5 +95,5 @@ func TestFilter(t *testing.T) {
 		res = append(res, x)
 	})
 
-	assert.Equal(t, []int{0, 7, 2}, res, "Map Test Error!")
+	assert.Equal(t, []int{0, 7, 2}, res, "Filter Test Error!")
 }

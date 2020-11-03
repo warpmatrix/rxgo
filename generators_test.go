@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pmlpml/rxgo"
 	"github.com/stretchr/testify/assert"
+	"github.com/warpmatrix/rxgo"
 )
 
 func TestRange(t *testing.T) {
