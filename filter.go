@@ -1,6 +1,7 @@
 package rxgo
 
 import (
+	"container/list"
 	"context"
 	"reflect"
 	"time"
@@ -38,7 +39,6 @@ func (parent *Observable) Debounce(timespan time.Duration) (o *Observable) {
 					latest = reflect.ValueOf(nil)
 				}
 			}
-			o.closeFlow(out)
 		}()
 
 		for !end {
@@ -58,12 +58,7 @@ func (parent *Observable) Debounce(timespan time.Duration) (o *Observable) {
 	return o
 }
 
-var debounceOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
-	fv := reflect.ValueOf(o.flip)
-	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(in), reflect.ValueOf(out)}
-	fv.Call(params)
-	return true
-}}
+var debounceOperator = defaultOperator
 
 // used in distinct operator
 type cmpKeyFunc func(interface{}) interface{}
@@ -132,12 +127,7 @@ func (parent *Observable) ElementAt(n uint) (o *Observable) {
 	return o
 }
 
-var elementAtOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
-	fv := reflect.ValueOf(o.flip)
-	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(in), reflect.ValueOf(out)}
-	fv.Call(params)
-	return true
-}}
+var elementAtOperator = defaultOperator
 
 // IgnoreElements do not emit any items from an Observable but mirror its termination notification
 func (parent *Observable) IgnoreElements() (o *Observable) {
@@ -249,6 +239,174 @@ var lastOperator = filtOperater{func(ctx context.Context, o *Observable, in chan
 	return
 }}
 
+// Sample emit the most recent item emitted by an Observable within periodic time intervals
+func (parent *Observable) Sample(smpChan chan interface{}) (o *Observable) {
+	o = parent.newFilterObservable("Sample")
+	o.flip = func(ctx context.Context, in chan interface{}, out chan interface{}) (end bool) {
+		var latest reflect.Value
+		for !end {
+			select {
+			case <-ctx.Done():
+				end = true
+			case item, ok := <-in:
+				if !ok {
+					end = true
+					break
+				}
+				latest = reflect.ValueOf(item)
+			case <-smpChan:
+				if latest != reflect.ValueOf(nil) {
+					if o.sendToFlow(ctx, latest.Interface(), out) {
+						end = true
+						return
+					}
+					latest = reflect.ValueOf(nil)
+				}
+			}
+		}
+		return
+	}
+	o.operator = sampleOperator
+	return o
+}
+
+var sampleOperator = defaultOperator
+
+// Skip suppress the first n items emitted by an Observable
+func (parent *Observable) Skip(n int) (o *Observable) {
+	o = parent.newFilterObservable("Skip")
+	o.flip = func(ctx context.Context, in chan interface{}, out chan interface{}) (end bool) {
+		i := 0
+		for !end {
+			select {
+			case <-ctx.Done():
+				end = true
+			case item, ok := <-in:
+				if !ok {
+					end = true
+					break
+				}
+				if i < n {
+					i++
+					continue
+				}
+				xVal := reflect.ValueOf(item)
+				if o.sendToFlow(ctx, xVal.Interface(), out) {
+					end = true
+					return
+				}
+			}
+		}
+		return
+	}
+	o.operator = skipOperator
+	return o
+}
+
+var skipOperator = defaultOperator
+
+// SkipLast suppress the last n items emitted by an Observable
+func (parent *Observable) SkipLast(n int) (o *Observable) {
+	o = parent.newFilterObservable("SkipLast")
+	o.flip = func(ctx context.Context, in chan interface{}, out chan interface{}) (end bool) {
+		q := list.New()
+		for !end {
+			select {
+			case <-ctx.Done():
+				end = true
+			case item, ok := <-in:
+				if !ok {
+					end = true
+					break
+				}
+				q.PushBack(item)
+				if q.Len() > n {
+					x := q.Front()
+					xVal := reflect.ValueOf(x.Value)
+					if o.sendToFlow(ctx, xVal.Interface(), out) {
+						end = true
+						return
+					}
+					q.Remove(x)
+				}
+			}
+		}
+		return
+	}
+	o.operator = skipLastOperator
+	return o
+}
+
+var skipLastOperator = defaultOperator
+
+// Take emit only the first n items emitted by an Observable
+func (parent *Observable) Take(n int) (o *Observable) {
+	o = parent.newFilterObservable("Take")
+	o.flip = func(ctx context.Context, in chan interface{}, out chan interface{}) (end bool) {
+		i := 0
+		for !end {
+			select {
+			case <-ctx.Done():
+				end = true
+			case item, ok := <-in:
+				if !ok {
+					end = true
+					break
+				}
+				if i < n {
+					i++
+					xVal := reflect.ValueOf(item)
+					if o.sendToFlow(ctx, xVal.Interface(), out) {
+						end = true
+						return
+					}
+				}
+			}
+		}
+		return
+	}
+	o.operator = skipOperator
+	return o
+}
+
+var takeOperator = defaultOperator
+
+// TakeLast emit only the last n items emitted by an Observable
+func (parent *Observable) TakeLast(n int) (o *Observable) {
+	o = parent.newFilterObservable("TakeLast")
+	o.flip = func(ctx context.Context, in chan interface{}, out chan interface{}) (end bool) {
+		q := list.New()
+		for !end {
+			select {
+			case <-ctx.Done():
+				end = true
+			case item, ok := <-in:
+				if !ok {
+					end = true
+					break
+				}
+				q.PushBack(item)
+				if q.Len() > n {
+					x := q.Front()
+					q.Remove(x)
+				}
+			}
+		}
+		for x := q.Front(); x != nil; x = x.Next() {
+			xVal := reflect.ValueOf(x.Value)
+			if o.sendToFlow(ctx, xVal.Interface(), out) {
+				end = true
+				return
+			}
+		}
+		return
+	}
+	o.operator = takeLastOperator
+	return o
+}
+
+var takeLastOperator = defaultOperator
+
 func (parent *Observable) newFilterObservable(name string) (o *Observable) {
 	//new Observable
 	o = newObservable()
@@ -259,3 +417,10 @@ func (parent *Observable) newFilterObservable(name string) (o *Observable) {
 	o.root = parent.root
 	return o
 }
+
+var defaultOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+	fv := reflect.ValueOf(o.flip)
+	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(in), reflect.ValueOf(out)}
+	fv.Call(params)
+	return true
+}}
