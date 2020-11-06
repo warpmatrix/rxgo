@@ -8,11 +8,11 @@ import (
 )
 
 // filter node implementation of streamOperator
-type filtOperater struct {
+type filtOperator struct {
 	opFunc func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool)
 }
 
-func (fop filtOperater) op(ctx context.Context, o *Observable) {
+func (fop filtOperator) op(ctx context.Context, o *Observable) {
 	in := o.pred.outflow
 	out := o.outflow
 
@@ -71,7 +71,7 @@ func (parent *Observable) Distinct(f cmpKeyFunc) (o *Observable) {
 	return o
 }
 
-var distinctOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+var distinctOperator = filtOperator{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
 	keyset := make(map[interface{}]struct{})
 	fv := o.flip.(cmpKeyFunc)
 	for !end {
@@ -83,12 +83,12 @@ var distinctOperator = filtOperater{func(ctx context.Context, o *Observable, in 
 				end = true
 				break
 			}
-			latest := reflect.ValueOf(item)
-			key := fv(latest.Interface())
+			itemVal := reflect.ValueOf(item)
+			key := fv(itemVal.Interface())
 			_, hasKey := keyset[key]
 			if !hasKey {
 				keyset[key] = struct{}{}
-				if o.sendToFlow(ctx, latest.Interface(), out) {
+				if o.sendToFlow(ctx, itemVal.Interface(), out) {
 					return
 				}
 			}
@@ -111,9 +111,9 @@ func (parent *Observable) ElementAt(n uint) (o *Observable) {
 					end = true
 					break
 				}
-				latest := reflect.ValueOf(item)
+				itemVal := reflect.ValueOf(item)
 				if i == n {
-					if o.sendToFlow(ctx, latest.Interface(), out) {
+					if o.sendToFlow(ctx, itemVal.Interface(), out) {
 						end = true
 						return
 					}
@@ -136,8 +136,19 @@ func (parent *Observable) IgnoreElements() (o *Observable) {
 	return o
 }
 
-var ignoreElementsOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
-	return true
+var ignoreElementsOperator = filtOperator{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+	for !end {
+		select {
+		case <-ctx.Done():
+			end = true
+		case _, ok := <-in:
+			if !ok {
+				end = true
+				break
+			}
+		}
+	}
+	return
 }}
 
 // First emit only the first item, or the first item that meets a condition, from an Observable
@@ -157,7 +168,7 @@ func (parent *Observable) First(f interface{}) (o *Observable) {
 	return o
 }
 
-var firstOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+var firstOperator = filtOperator{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
 	fv := reflect.ValueOf(o.flip)
 	for x := range in {
 		if end {
@@ -205,7 +216,7 @@ func (parent *Observable) Last(f interface{}) (o *Observable) {
 	return o
 }
 
-var lastOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+var lastOperator = filtOperator{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
 	fv := reflect.ValueOf(o.flip)
 	var last reflect.Value
 	for x := range in {
@@ -418,7 +429,7 @@ func (parent *Observable) newFilterObservable(name string) (o *Observable) {
 	return o
 }
 
-var defaultOperator = filtOperater{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
+var defaultOperator = filtOperator{func(ctx context.Context, o *Observable, in chan interface{}, out chan interface{}) (end bool) {
 	fv := reflect.ValueOf(o.flip)
 	params := []reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(in), reflect.ValueOf(out)}
 	fv.Call(params)

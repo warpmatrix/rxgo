@@ -1,7 +1,6 @@
 package rxgo_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 func TestDebounce(t *testing.T) {
 	res := []int{}
 	timespan := 2 * time.Millisecond
-	rxgo.Just(0, 1, 2, 3, 4, 5, 6).Map(func(x int) int {
+	rxgo.Just(0, 1, 2, 3, 4, 5).Map(func(x int) int {
 		time.Sleep(1 * time.Millisecond)
 		return x
 	}).Debounce(timespan).Subscribe(func(x int) {
@@ -23,8 +22,6 @@ func TestDebounce(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	res := []int{}
 	rxgo.Just(1, 2, 2, 1, 3).Distinct(func(item interface{}) interface{} {
 		return item
@@ -78,21 +75,11 @@ func TestSample(t *testing.T) {
 	res := []int{}
 	smpChan := make(chan interface{})
 	go func() {
-		rxgo.Just('A', 'B', 'C', 'D', 'E').Map(func(x rune) rune {
-			switch x {
-			case 'A':
-				time.Sleep(4 * time.Millisecond)
-			case 'B':
-				time.Sleep(3 * time.Millisecond)
-			case 'C':
-				time.Sleep(1 * time.Millisecond)
-			case 'D':
-				time.Sleep(5 * time.Millisecond)
-			default:
-				time.Sleep(1 * time.Millisecond)
-			}
+		rxgo.Just(4, 3, 1, 5, 1).Map(func(x int) int {
+			delay := time.Duration(x) * time.Millisecond
+			time.Sleep(delay)
 			return x
-		}).Subscribe(func(x rune) {
+		}).Subscribe(func(x int) {
 			smpChan <- x
 		})
 	}()
